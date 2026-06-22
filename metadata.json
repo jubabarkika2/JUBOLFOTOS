@@ -1,0 +1,6 @@
+{
+  "name": "Gmail Photo Gallery",
+  "description": "Uma galeria de fotos elegante que exibe as imagens recebidas no seu e-mail do Gmail, usando a sua própria caixa de entrada como banco de dados.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
