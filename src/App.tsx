@@ -20,7 +20,11 @@ import {
   ChevronRight, 
   FolderHeart,
   FileImage,
-  Inbox
+  Inbox,
+  Copy,
+  Check,
+  ExternalLink,
+  AlertTriangle
 } from 'lucide-react';
 import { initAuth, googleSignIn, googleSignInRedirect, logout } from './lib/firebase';
 import { listGmailPhotoMessages, getGmailMessageDetails } from './lib/gmail';
@@ -33,9 +37,20 @@ export default function App() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isSlowAuth, setIsSlowAuth] = useState<boolean>(false);
 
   // Detecção de Iframe para exibir aviso inteligente de nova aba
   const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+  
+  const [copied, setCopied] = useState<boolean>(false);
+
+  const handleCopyLink = () => {
+    if (typeof window !== 'undefined') {
+      navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   // Estados da Galeria
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
@@ -52,20 +67,32 @@ export default function App() {
 
   // Inicializa a autenticação
   useEffect(() => {
+    const backupTimer = setTimeout(() => {
+      console.warn("Conexão com Google Auth demorou muito. Ativando painel de suporte...");
+      setIsSlowAuth(true);
+      setAuthChecking(false);
+    }, 4500);
+
     const unsubscribe = initAuth(
       (currentUser, token) => {
+        clearTimeout(backupTimer);
         setUser(currentUser);
         setAccessToken(token);
         setAuthChecking(false);
+        setIsSlowAuth(false);
       },
       () => {
+        clearTimeout(backupTimer);
         setUser(null);
         setAccessToken(null);
         setAuthChecking(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(backupTimer);
+      unsubscribe();
+    };
   }, []);
 
   // Lógica de carregar fotos do Gmail
@@ -351,27 +378,56 @@ export default function App() {
                   </div>
                 </div>
 
-                {isIframe && (
-                  <div className="mt-6 p-5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-left max-w-md">
+                {(isIframe || isSlowAuth) && (
+                  <div className="mt-6 p-5 bg-zinc-950/80 border border-amber-500/30 rounded-2xl text-left max-w-md w-full shadow-lg">
                     <div className="flex gap-3">
-                      <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-sm font-bold text-amber-400 leading-snug">⚠️ Atenção: Rodando no Celular?</h4>
-                        <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
-                          O painel do AI Studio roda dentro de uma moldura (iframe) de segurança do Google que **bloqueia popups e logins de contas em celulares**.
+                      <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="w-full">
+                        <h4 className="text-sm font-bold text-amber-400 leading-snug">⚠️ Problemas para conectar ou carregamento infinito?</h4>
+                        <p className="text-xs text-zinc-300 mt-1.5 leading-relaxed">
+                          O painel do AI Studio roda dentro de uma moldura de segurança (iframe) que **bloqueia popups, cookies de terceiros e logins de contas do Google** (especialmente em celulares ou guias anônimas).
                         </p>
-                        <p className="text-xs text-zinc-300 mt-2 font-medium">
-                          Para resolver isso de forma simples e segura, abra o app em uma aba independente:
+                        
+                        <div className="mt-4 p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+                          <p className="text-xs font-semibold text-zinc-200">Como resolver em 2 passos simples:</p>
+                          <ol className="mt-2 space-y-2 text-[11px] text-zinc-400 list-decimal list-inside">
+                            <li>Copie o link seguro do aplicativo abaixo.</li>
+                            <li>Abra o seu navegador nativo (<strong className="text-zinc-300">Safari</strong> no iPhone ou <strong className="text-zinc-300">Chrome</strong> no Android) e cole o link para acessar diretamente, fora do AI Studio!</li>
+                          </ol>
+                        </div>
+
+                        <div className="mt-4 flex flex-col sm:flex-row gap-2.5">
+                          <button 
+                            onClick={handleCopyLink}
+                            className="flex-1 inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold px-4 py-2.5 rounded-xl text-xs transition-colors active:scale-95"
+                          >
+                            {copied ? (
+                              <>
+                                <Check className="w-4 h-4 text-neutral-950" />
+                                Link Copiado!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                Copiar Link do App
+                              </>
+                            )}
+                          </button>
+                          
+                          <a 
+                            href={window.location.href} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex-1 inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition-colors active:scale-95 border border-zinc-700/50"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Abrir em Nova Aba
+                          </a>
+                        </div>
+                        
+                        <p className="text-[10px] text-zinc-500 mt-3 text-center italic font-mono break-all">
+                          {typeof window !== 'undefined' ? window.location.href : ''}
                         </p>
-                        <a 
-                          href={window.location.href} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="mt-3 inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold px-4 py-2 rounded-xl text-xs transition-all active:scale-95"
-                        >
-                          Abrir App em Nova Aba do Navegador
-                          <ChevronRight className="w-4 h-4" />
-                        </a>
                       </div>
                     </div>
                   </div>

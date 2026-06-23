@@ -46,6 +46,16 @@ export const initAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
   onAuthFailure?: () => void
 ) => {
+  let hasResolved = false;
+
+  // Garante que o estado de carregamento termine se o Firebase não responder
+  const fbTimeout = setTimeout(() => {
+    if (!hasResolved) {
+      console.warn('Firebase Auth demorou para responder. Forçando fallback...');
+      if (onAuthFailure) onAuthFailure();
+    }
+  }, 3000);
+
   // 1. Processa o resultado do redirecionamento se o usuário acabou de voltar do login no celular
   getRedirectResult(auth)
     .then((result) => {
@@ -53,6 +63,8 @@ export const initAuth = (
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential?.accessToken) {
           saveToken(credential.accessToken);
+          hasResolved = true;
+          clearTimeout(fbTimeout);
           if (result.user && onAuthSuccess) {
             onAuthSuccess(result.user, credential.accessToken);
           }
@@ -64,6 +76,8 @@ export const initAuth = (
     });
 
   return onAuthStateChanged(auth, async (user: User | null) => {
+    hasResolved = true;
+    clearTimeout(fbTimeout);
     if (user) {
       const token = getAccessToken();
       if (token) {
