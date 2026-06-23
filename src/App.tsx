@@ -190,9 +190,17 @@ export default function App() {
 
   // Função para lidar com login via popup (melhor para PC)
   const handleSignIn = async () => {
+    let popupCheckTimer: any = null;
     try {
       setAuthChecking(true);
       setAuthError(null);
+      
+      // Timer de escape caso o popup seja bloqueado silenciosamente ou fechado de forma errática pelo navegador
+      popupCheckTimer = setTimeout(() => {
+        setAuthChecking(false);
+        setAuthError('O popup de login parece ter sido bloqueado pelo seu navegador, ou está demorando muito para se comunicar. Se estiver no celular, prefira a opção "Login de Celular" ou abra o link do app diretamente no Chrome/Safari.');
+      }, 7000);
+
       const res = await googleSignIn();
       if (res) {
         setUser(res.user);
@@ -202,20 +210,37 @@ export default function App() {
       console.error('Erro ao fazer login:', err);
       setAuthError('Ocorreu um problema ao conectar com sua conta Google via Popup. Certifique-se de autorizar os escopos solicitados.');
     } finally {
+      if (popupCheckTimer) clearTimeout(popupCheckTimer);
       setAuthChecking(false);
     }
   };
 
   // Função para lidar com login via redirecionamento (melhor para celular)
   const handleSignInRedirect = async () => {
+    let redirectCheckTimer: any = null;
     try {
       setAuthChecking(true);
       setAuthError(null);
+      
+      // Timer de escape caso o navegador móvel ou o iframe do AI Studio bloqueie silenciosamente a troca de página do login
+      redirectCheckTimer = setTimeout(() => {
+        setAuthChecking(false);
+        setAuthError('O login por redirecionamento foi impedido pelo navegador ou pela moldura segura do AI Studio. Para funcionar com segurança em segundos: copie o link seguro do aplicativo abaixo e abra no navegador real do celular!');
+        setIsSlowAuth(true);
+      }, 4500);
+
       await googleSignInRedirect();
+      // Nota: se o redirecionamento funcionar com sucesso, a página é recarregada pelo Firebase e o setTimeout não é executado.
     } catch (err: any) {
       console.error('Erro ao iniciar redirecionamento:', err);
       setAuthError('Falha ao iniciar o redirecionamento. Certifique-se de não estar dentro do visualizador restrito do AI Studio.');
       setAuthChecking(false);
+    } finally {
+      // Como o redirect abandona a página, não costuma passar pelo finally na página de origem se for bem-sucedido imediatamente,
+      // mas se houver erro ao chamar a função, limpamos o timer.
+      if (redirectCheckTimer) {
+        // Deixamos o timer agir caso o redirect não troque a página de fato (ficando travado no sandbox)
+      }
     }
   };
 
@@ -327,12 +352,33 @@ export default function App() {
       {/* ÁREA DE CONTEÚDO */}
       <main className="flex-1 flex flex-col max-w-7xl w-full mx-auto px-4 md:px-8 py-8">
         {authChecking ? (
-          /* TELA DE AUTENTICANDO */
-          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4 min-h-[50vh]">
-            <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
-            <p className="text-sm text-zinc-400 font-mono uppercase tracking-widest text-center animate-pulse">
-              Verificando sua conta Google...
+          /* TELA DE AUTENTICANDO INOVADORA COM ESCAPE */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4 min-h-[55vh] text-center max-w-md mx-auto">
+            <div className="relative mb-2">
+              <Loader2 className="w-12 h-12 animate-spin text-amber-500" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-amber-500/20 rounded-full blur-xs" />
+            </div>
+            
+            <p className="text-sm font-bold text-zinc-200 uppercase tracking-widest animate-pulse">
+              Verificando sua conta...
             </p>
+            
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              O Firebase está se comunicando com o Google. Se estiver no celular, o navegador pode tentar bloquear o login em segundo plano.
+            </p>
+            
+            <div className="mt-4 flex flex-col gap-2 w-full">
+              <button
+                onClick={() => {
+                  setAuthChecking(false);
+                  setIsSlowAuth(true); // Ativa o painel de suporte
+                  setAuthError('Carregamento interrompido pelo usuário. Para conectar sem problemas, siga as instruções de suporte abaixo.');
+                }}
+                className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-750 text-xs font-semibold text-zinc-400 hover:text-white rounded-xl transition-all active:scale-95 cursor-pointer shadow-md"
+              >
+                Cancelar e Ver Painel de Suporte
+              </button>
+            </div>
           </div>
         ) : !user ? (
           /* TELA DE LOGIN (NÃO LOGADO) */
