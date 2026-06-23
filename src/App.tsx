@@ -22,7 +22,7 @@ import {
   FileImage,
   Inbox
 } from 'lucide-react';
-import { initAuth, googleSignIn, logout } from './lib/firebase';
+import { initAuth, googleSignIn, googleSignInRedirect, logout } from './lib/firebase';
 import { listGmailPhotoMessages, getGmailMessageDetails } from './lib/gmail';
 import { GalleryPhoto, GmailListResponse } from './types';
 import PhotoCard from './components/PhotoCard';
@@ -33,6 +33,9 @@ export default function App() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  // Detecção de Iframe para exibir aviso inteligente de nova aba
+  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   // Estados da Galeria
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
@@ -158,7 +161,7 @@ export default function App() {
     }
   }, [user, accessToken, loadPhotosFromGmail]);
 
-  // Função para lidar com login
+  // Função para lidar com login via popup (melhor para PC)
   const handleSignIn = async () => {
     try {
       setAuthChecking(true);
@@ -170,8 +173,21 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Erro ao fazer login:', err);
-      setAuthError('Ocorreu um problema ao conectar com sua conta Google. Certifique-se de autorizar os escopos solicitados.');
+      setAuthError('Ocorreu um problema ao conectar com sua conta Google via Popup. Certifique-se de autorizar os escopos solicitados.');
     } finally {
+      setAuthChecking(false);
+    }
+  };
+
+  // Função para lidar com login via redirecionamento (melhor para celular)
+  const handleSignInRedirect = async () => {
+    try {
+      setAuthChecking(true);
+      setAuthError(null);
+      await googleSignInRedirect();
+    } catch (err: any) {
+      console.error('Erro ao iniciar redirecionamento:', err);
+      setAuthError('Falha ao iniciar o redirecionamento. Certifique-se de não estar dentro do visualizador restrito do AI Studio.');
       setAuthChecking(false);
     }
   };
@@ -331,21 +347,48 @@ export default function App() {
                   </div>
                   <div className="flex gap-2.5 items-start">
                     <FolderHeart className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    <span>Nenhuma imagem é armazenada fora do seu Gmail: os dados permanecem estritamente na sua conta.</span>
+                    <span>Nenhuma imagem é armazenada fora do seu Gmail: os dados permanecem estritamente na sua conta de e-mail.</span>
                   </div>
                 </div>
 
+                {isIframe && (
+                  <div className="mt-6 p-5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-left max-w-md">
+                    <div className="flex gap-3">
+                      <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-sm font-bold text-amber-400 leading-snug">⚠️ Atenção: Rodando no Celular?</h4>
+                        <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+                          O painel do AI Studio roda dentro de uma moldura (iframe) de segurança do Google que **bloqueia popups e logins de contas em celulares**.
+                        </p>
+                        <p className="text-xs text-zinc-300 mt-2 font-medium">
+                          Para resolver isso de forma simples e segura, abra o app em uma aba independente:
+                        </p>
+                        <a 
+                          href={window.location.href} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold px-4 py-2 rounded-xl text-xs transition-all active:scale-95"
+                        >
+                          Abrir App em Nova Aba do Navegador
+                          <ChevronRight className="w-4 h-4" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {authError && (
-                  <div className="mt-6 p-4 bg-red-950/50 border border-red-900/50 rounded-2xl text-xs text-red-300 text-left max-w-md">
+                  <div className="mt-6 p-4 bg-red-950/50 border border-red-900/50 rounded-2xl text-xs text-red-300 text-left max-w-md w-full">
                     {authError}
                   </div>
                 )}
 
-                {/* Botão Oficial Google SignIn */}
-                <div className="mt-10 w-full max-w-sm flex justify-center">
+                {/* Botões Oficiais Google SignIn (Popup vs Redirect) */}
+                <div className="mt-8 w-full max-w-sm flex flex-col gap-3">
+                  {/* Botão de Redirecionamento (Recomendado para Celulares e Navegadores Mobile) */}
                   <button 
-                    onClick={handleSignIn}
-                    className="group relative flex items-center justify-center gap-3 bg-white hover:bg-neutral-100 text-neutral-900 font-bold py-3.5 px-6 rounded-2xl shadow-xl transition-all duration-200 border border-white cursor-pointer hover:shadow-white/5 active:scale-98 w-full"
+                    onClick={handleSignInRedirect}
+                    className="group relative flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold py-3.5 px-6 rounded-2xl shadow-xl transition-all duration-200 cursor-pointer active:scale-98 w-full border border-amber-400"
                   >
                     <svg className="w-5 h-5 shrink-0" viewBox="0 0 48 48">
                       <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
@@ -353,7 +396,27 @@ export default function App() {
                       <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
                       <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
                     </svg>
-                    <span>Conectar com o Gmail</span>
+                    <div className="text-left font-sans">
+                      <div className="text-sm font-extrabold leading-none">Login de Celular</div>
+                      <div className="text-[9px] text-zinc-800 font-medium">Método por Redirecionamento</div>
+                    </div>
+                  </button>
+
+                  {/* Botão de Popup (Ideal para computadores e laptops) */}
+                  <button 
+                    onClick={handleSignIn}
+                    className="group relative flex items-center justify-center gap-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3.5 px-6 rounded-2xl shadow-xl transition-all duration-200 border border-zinc-700/50 cursor-pointer active:scale-98 w-full"
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                    </svg>
+                    <div className="text-left font-sans">
+                      <div className="text-xs font-bold leading-none">Login de Computador</div>
+                      <div className="text-[8px] text-zinc-400 font-mono">Abre uma janela Popup</div>
+                    </div>
                   </button>
                 </div>
               </div>
